@@ -12,22 +12,40 @@ const MODES = new Set(['lf', 'crlf', 'warmup'])
 const MAX_BYTES = 256 * 1024 * 1024
 const IGNORE = ['**/node_modules/**', '**/.git/**']
 
+/**
+ * Validate CLI arguments.
+ * @param {string[]} args arguments without the node binary and script path
+ * @returns {{ mode: 'lf'|'crlf'|'warmup', pattern: string }}
+ * @throws {Error} with the usage text on any invalid input
+ */
 function parseArgs(args) {
   if (args.length !== 2 || !MODES.has(args[0]) || !args[1]) throw new Error(USAGE)
   return { mode: args[0], pattern: args[1] }
 }
 
-// Only accept files that survive a lossless UTF-8 round-trip and contain no NUL byte.
+/**
+ * Only accept files that survive a lossless UTF-8 round-trip and contain no NUL byte.
+ * @param {Buffer} buf file contents
+ * @returns {boolean}
+ */
 function isUtf8Text(buf) {
   if (buf.includes(0)) return false
   return Buffer.from(buf.toString('utf8'), 'utf8').equals(buf)
 }
 
+/**
+ * Write `content` to `file` atomically via a temp file in the same directory.
+ * The permission bits of `mode` are applied explicitly so the umask cannot alter them.
+ * @param {string} file absolute path of the target file
+ * @param {Buffer} content bytes to write
+ * @param {number} mode st_mode of the original file; only the permission bits are used
+ */
 function writeAtomic(file, content, mode) {
   const tmp = path.join(path.dirname(file),
     `.${path.basename(file)}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`)
   try {
     fs.writeFileSync(tmp, content, { mode, flag: 'wx' })
+    fs.chmodSync(tmp, mode & 0o7777)
     fs.renameSync(tmp, file)
   } catch (err) {
     try { fs.unlinkSync(tmp) } catch { /* nothing to clean */ }
@@ -35,9 +53,14 @@ function writeAtomic(file, content, mode) {
   }
 }
 
-async function run() {
-  const { mode, pattern } = parseArgs(process.argv.slice(2))
-  const cwd = process.cwd()
+/**
+ * Convert every file matching the glob. Sets `process.exitCode` to 1 if any file failed.
+ * @param {string[]} [argv] CLI arguments, defaults to `process.argv.slice(2)`
+ * @param {string} [cwd] directory the glob is resolved against, defaults to `process.cwd()`
+ * @throws {Error} on usage errors or when no file matches
+ */
+async function run(argv = process.argv.slice(2), cwd = process.cwd()) {
+  const { mode, pattern } = parseArgs(argv)
   const convert = mode === 'crlf' ? eol.crlf : eol.lf
   const dryRun = mode === 'warmup'
 
@@ -70,7 +93,11 @@ async function run() {
   if (stats.failed > 0) process.exitCode = 1
 }
 
-run().catch(err => {
-  console.error(`ERROR: ${err.message}`)
-  process.exitCode = 2
-})
+module.exports = { parseArgs, isUtf8Text, writeAtomic, run }
+
+if (require.main === module) {
+  run().catch(err => {
+    console.error(`ERROR: ${err.message}`)
+    process.exitCode = 2
+  })
+}

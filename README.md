@@ -14,7 +14,7 @@ API: `eolConverter <lf|crlf|warmup> "glob_pattern"`
 
 * The mode is mandatory: `lf`, `crlf`, or `warmup` (dry run) - see examples.
 * File paths are resolved with a [glob pattern](https://www.npmjs.com/package/glob). Quote it so your shell does not expand it.
-* Requires Node.js 16 or newer.
+* Requires Node.js 22.8 or newer.
 
 ## Examples
 
