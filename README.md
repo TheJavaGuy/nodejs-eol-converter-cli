@@ -10,10 +10,11 @@ Installation:
 npm i -g eol-converter-cli
 ```
 
-API: `eolConverter OptionalModifier "glob_files_regex"`
+API: `eolConverter <lf|crlf|warmup> "glob_pattern"`
 
-* *OptionalModifier* can be empty, `warmup`, or `crlf` - see examples.
-* For files paths resolution is used [GLOB regex](https://www.npmjs.com/package/glob)
+* The mode is mandatory: `lf`, `crlf`, or `warmup` (dry run) - see examples.
+* File paths are resolved with a [glob pattern](https://www.npmjs.com/package/glob). Quote it so your shell does not expand it.
+* Requires Node.js 16 or newer.
 
 ## Examples
 
@@ -28,10 +29,10 @@ Run conversions (cannot be undone):
 **To LF (Unix & Mac default)**
 
 ```
-eolConverter "**/*.js"
-eolConverter "**/*.{js,jsx,ts,tsx}"
-eolConverter "src/**/*.js"
-eolConverter "{src,tests}/**/*.js"
+eolConverter lf "**/*.js"
+eolConverter lf "**/*.{js,jsx,ts,tsx}"
+eolConverter lf "src/**/*.js"
+eolConverter lf "{src,tests}/**/*.js"
 ```
 
 **To CRLF (Windows default)**
@@ -39,6 +40,15 @@ eolConverter "{src,tests}/**/*.js"
 ```
 eolConverter crlf "**/*.js"
 ```
+
+## Behaviour
+
+* Every `\r\n`, lone `\r` and `\n` is normalized to the target line ending. A lone `\r` (classic Mac) is intentionally rewritten too.
+* Only regular files that are valid UTF-8 and contain no NUL byte are touched. Binary files, UTF-16 files, symlinks and files above 256 MiB are skipped with a message.
+* `**/node_modules/**` and `**/.git/**` are always ignored.
+* Files whose content would not change are not rewritten, so their mtime stays intact.
+* Writes are atomic: content goes to a temp file next to the target and is renamed over it.
+* Exit code is `0` on success, `1` if any file failed, `2` on usage error or when no file matched.
 
 ## Tips
 

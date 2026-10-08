@@ -18,6 +18,9 @@
   ],
   "author": "Juraj Husar <http://github.com/jurosh/>",
   "license": "Apache 2.0",
+  "engines": {
+    "node": ">=16"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/jurosh/nodejs-eol-converter-cli"
