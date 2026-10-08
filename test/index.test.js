@@ -12,7 +12,10 @@ const { parseArgs, isUtf8Text, writeAtomic, run } = require('../src/index.js')
 const BIN = path.resolve(__dirname, '../src/index.js')
 const USAGE = 'Usage: eolConverter <lf|crlf|warmup> <glob>'
 const MAX_BYTES = 256 * 1024 * 1024
-const IS_ROOT = process.platform !== 'win32' && process.getuid() === 0
+const IS_WINDOWS = process.platform === 'win32'
+const IS_ROOT = !IS_WINDOWS && process.getuid() === 0
+// Windows has no POSIX permission bits; Node reports 0o666 for every writable file there.
+const NO_POSIX_MODES = { skip: IS_WINDOWS && 'POSIX file modes not supported on Windows' }
 
 function tmpDir(t) {
   const dir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'eol-test-'))
@@ -99,7 +102,7 @@ test('isUtf8Text', async (t) => {
 })
 
 test('writeAtomic', async (t) => {
-  await t.test('writes content, keeps the given mode despite the umask and leaves no temp file', () => {
+  await t.test('writes content, keeps the given mode despite the umask and leaves no temp file', NO_POSIX_MODES, () => {
     const dir = tmpDir(t)
     const file = path.join(dir, 'out.txt')
     writeAtomic(file, Buffer.from('data\n'), 0o664)
@@ -164,7 +167,7 @@ test('run', async (t) => {
     assert.equal(read(f), 'héllo\n€ 日本\n')
   })
 
-  await t.test('preserves the file mode of converted files, including bits the umask would clear', async (t) => {
+  await t.test('preserves the file mode of converted files, including bits the umask would clear', NO_POSIX_MODES, async (t) => {
     const dir = tmpDir(t)
     const f = write(dir, 'script.sh', '#!/bin/sh\r\necho hi\r\n')
     fs.chmodSync(f, 0o775)
@@ -210,7 +213,7 @@ test('run', async (t) => {
     assert.ok(c.out.includes('changed=0 unchanged=0 skipped=2 failed=0'))
   })
 
-  await t.test('skips symlinks and leaves their target alone', { skip: process.platform === 'win32' }, async (t) => {
+  await t.test('skips symlinks and leaves their target alone', { skip: IS_WINDOWS }, async (t) => {
     const dir = tmpDir(t)
     const target = write(dir, 'target.txt', 'a\r\n')
     const link = path.join(dir, 'link.txt')
@@ -307,7 +310,7 @@ test('cli', async (t) => {
     assert.ok(r.stdout.includes(`CHANGED: ${f}`))
   })
 
-  await t.test('exits 1 when a file cannot be read', { skip: IS_ROOT || process.platform === 'win32' }, (t) => {
+  await t.test('exits 1 when a file cannot be read', { skip: IS_ROOT || IS_WINDOWS }, (t) => {
     const dir = tmpDir(t)
     const f = write(dir, 'locked.txt', 'a\r\n', 0o000)
     const r = runCli(['lf', 'locked.txt'], dir)
